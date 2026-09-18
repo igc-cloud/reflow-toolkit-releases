@@ -65,9 +65,16 @@ fi
 
 if command -v minisign >/dev/null 2>&1; then
     if curl -fsSL -o "$TMP/$BUNDLE.sig" "$BASE/$BUNDLE.sig" 2>/dev/null \
-        && curl -fsSL -o "$TMP/pubkey" "$BASE/minisign.pub" 2>/dev/null; then
+        && curl -fsSL -o "$TMP/minisign.pub" "$BASE/minisign.pub" 2>/dev/null; then
         say "Verifying signature..."
-        minisign -Vm "$TMP/$BUNDLE" -p "$TMP/pubkey" >/dev/null 2>&1 \
+        # Two details that have to be answered or a perfectly good release fails to verify.
+        # Tauri writes the signature file base64-encoded (it is the same blob latest.json
+        # carries), and minisign looks for "<file>.minisig" unless handed the path. Decoded
+        # with openssl rather than base64(1), whose decode flag is -d on newer macOS and -D
+        # on older; openssl is on every Mac and spells it the same way everywhere.
+        openssl base64 -d -A -in "$TMP/$BUNDLE.sig" -out "$TMP/$BUNDLE.minisig" 2>/dev/null \
+            || fail "Could not decode the signature. Nothing was installed."
+        minisign -Vm "$TMP/$BUNDLE" -x "$TMP/$BUNDLE.minisig" -p "$TMP/minisign.pub" >/dev/null 2>&1 \
             || fail "Signature verification failed. Nothing was installed."
     fi
 else
